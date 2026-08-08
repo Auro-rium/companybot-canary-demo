@@ -44,6 +44,7 @@ jobs:
           api-url: ${{ secrets.CANARY_API_URL }}
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}
           target-url: ${{ steps.preview.outputs.url }}/chat
+          baseline-url: ${{ vars.CANARY_BASELINE_URL }}
           health-url: ${{ steps.preview.outputs.url }}/health
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
           environment: pr-gate
@@ -52,4 +53,3 @@ jobs:
         run: |
           echo "Decision: ${{ steps.canary.outputs.decision }}"
           echo "Release: ${{ steps.canary.outputs.release-id }}"
-

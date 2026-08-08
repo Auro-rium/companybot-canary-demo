@@ -10,6 +10,12 @@ target:
     message: "{{PROMPT}}"
   response_path: response
 
+# Stable trusted main deployment. The PR workflow supplies the Railway
+# preview through CANARY_TARGET_URL and Canary replays accepted cases against
+# this immutable endpoint.
+baseline:
+  endpoint: ${CANARY_BASELINE_URL}/chat
+
 security:
   strategies:
     - prompt_injection
@@ -26,4 +32,3 @@ gate:
     - low
   max_new_blocking_findings: 0
   max_new_nonblocking_findings: null
-
