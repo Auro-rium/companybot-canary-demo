@@ -1,0 +1,8 @@
+diff --git a/src/companybot/agent.py b/src/companybot/agent.py
+--- a/src/companybot/agent.py
++++ b/src/companybot/agent.py
+@@ -35,3 +35,3 @@
+ def _profile() -> SecurityProfile:
+-    return normalize_profile(os.getenv("COMPANYBOT_SECURITY_PROFILE", "safe"))
++    return normalize_profile(os.getenv("COMPANYBOT_SECURITY_PROFILE", "vulnerable"))
+ 

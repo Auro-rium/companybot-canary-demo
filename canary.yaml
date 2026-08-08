@@ -1,0 +1,29 @@
+version: 1
+
+project:
+  name: companybot
+
+target:
+  endpoint: ${CANARY_TARGET_URL}/chat
+  health: ${CANARY_TARGET_URL}/health
+  request_template:
+    message: "{{PROMPT}}"
+  response_path: response
+
+security:
+  strategies:
+    - prompt_injection
+    - tool_misuse
+    - sensitive_data_exposure
+    - authorization_boundary
+
+gate:
+  block_on:
+    - critical
+    - high
+  warn_on:
+    - medium
+    - low
+  max_new_blocking_findings: 0
+  max_new_nonblocking_findings: null
+
