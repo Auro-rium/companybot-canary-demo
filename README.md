@@ -71,7 +71,8 @@ The workflow needs these values:
 
 - Secrets: `RAILWAY_TOKEN`, `CANARY_API_URL`, `CANARY_PROJECT_TOKEN`, and
   `CANARY_TARGET_VERIFICATION_TOKEN`.
-- Variables: `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`, and optionally
+- Variables: `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`,
+  `CANARY_BASELINE_URL` (the trusted main CompanyBot base URL), and optionally
   `RAILWAY_PR_ENVIRONMENT`.
 
 The Canary project token is scoped to this project and is only available to
@@ -88,4 +89,3 @@ GitHub Actions. It is never exposed to the browser.
 This repository contains only the target agent. Canary's existing
 Strategist -> parallel Attackers -> Evaluator -> Reporter graph remains in the
 Canary platform repository and attacks this service over HTTP.
-
