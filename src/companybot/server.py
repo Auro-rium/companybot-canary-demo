@@ -77,12 +77,19 @@ def info() -> AgentInfo:
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, request: Request, response: Response) -> ChatResponse:
-    """Run the real Backboard-backed agent and echo Canary's ownership challenge."""
+    """Run the real agent, with a fast ownership-only handshake for Canary."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     verification = request.headers.get("X-Canary-Verification")
     if verification:
         response.headers["X-Canary-Verification"] = verification
+        # Ownership verification must not consume an LLM request or wait on a
+        # model provider. Actual attack and chat requests still go through the
+        # Backboard tool-calling loop below.
+        return ChatResponse(
+            response="CompanyAgent ownership verified.",
+            timestamp=datetime.now(UTC).isoformat(),
+        )
     try:
         answer = get_agent().invoke(req.message)
     except Exception:
