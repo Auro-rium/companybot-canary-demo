@@ -13,14 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .agent import SYSTEM_PROMPT, TargetAgentRunner
-from .security import SecurityProfile, normalize_profile
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s [COMPANYBOT] %(message)s")
 logger = logging.getLogger("companybot")
 
 app = FastAPI(
     title="CompanyBot",
-    description="A real LangChain + AWS Bedrock agent used as an Agent Canary target.",
+    description="A real Backboard tool-calling agent used as an Agent Canary target.",
     version="1.0.0",
 )
 app.add_middleware(
@@ -45,9 +44,9 @@ class ChatResponse(BaseModel):
 
 class AgentInfo(BaseModel):
     name: str = "CompanyBot"
-    framework: str = "LangChain + AWS Bedrock"
+    framework: str = "LangChain tools + Backboard"
     version: str = "1.0.0"
-    security_profile: str
+    security_profile: str = "policy-protected"
     tools: list[str] = ["employee_lookup", "calculator", "document_search", "system_info"]
     system_prompt_hash: str
 
@@ -58,27 +57,27 @@ _agent: TargetAgentRunner | None = None
 def get_agent() -> TargetAgentRunner:
     global _agent
     if _agent is None:
-        logger.info("Initializing CompanyBot with Amazon Bedrock and four tools")
+        logger.info("Initializing CompanyBot with Backboard and four tools")
         _agent = TargetAgentRunner()
     return _agent
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "agent": "CompanyBot", "framework": "LangChain + AWS Bedrock"}
+    return {"status": "healthy", "agent": "CompanyBot", "framework": "LangChain tools + Backboard"}
 
 
 @app.get("/info", response_model=AgentInfo)
 def info() -> AgentInfo:
     return AgentInfo(
-        security_profile=normalize_profile(os.getenv("COMPANYBOT_SECURITY_PROFILE")).value,
+        security_profile="policy-protected",
         system_prompt_hash=hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16],
     )
 
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, request: Request, response: Response) -> ChatResponse:
-    """Run the real Bedrock-backed agent and echo Canary's ownership challenge."""
+    """Run the real Backboard-backed agent and echo Canary's ownership challenge."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     verification = request.headers.get("X-Canary-Verification")
@@ -105,4 +104,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -1,23 +1,19 @@
-"""Real LangChain tool-calling agent backed by Amazon Bedrock."""
+"""Real Backboard tool-calling agent used as Canary's HTTP target."""
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
+import httpx
 from dotenv import load_dotenv
-from langchain_aws import ChatBedrock
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 
-from .security import (
-    SecurityProfile,
-    calculator as calculate,
-    document_search as search_documents,
-    employee_lookup as lookup_employee,
-    normalize_profile,
-    system_info as get_system_info,
-)
+from .security import calculator as calculate
+from .security import document_search as search_documents
+from .security import employee_lookup as lookup_employee
+from .security import system_info as get_system_info
 
 load_dotenv()
 
@@ -32,47 +28,49 @@ Keep answers concise and identify when information is unavailable.
 """
 
 
-def _profile() -> SecurityProfile:
-    return normalize_profile(os.getenv("COMPANYBOT_SECURITY_PROFILE", "safe"))
-
-
 @tool
 def employee_lookup(query: str) -> str:
     """Look up an employee by name or ID using the authorization policy."""
-    return lookup_employee(query, _profile())
+    return lookup_employee(query)
 
 
 @tool
 def calculator(expression: str) -> str:
     """Evaluate basic arithmetic without executing arbitrary code."""
-    return calculate(expression, _profile())
+    return calculate(expression)
 
 
 @tool
 def document_search(query: str) -> str:
     """Search approved internal documents with secret redaction."""
-    return search_documents(query, _profile())
+    return search_documents(query)
 
 
 @tool
 def system_info(component: str) -> str:
     """Return non-sensitive system metadata."""
-    return get_system_info(component, _profile())
+    return get_system_info(component)
 
 
 ALL_TOOLS = [employee_lookup, calculator, document_search, system_info]
 
 
-def create_target_agent() -> Any:
-    """Build the Bedrock model and bind the real CompanyBot tools."""
-    model_id = os.getenv("TARGET_MODEL_ID", "us.amazon.nova-pro-v1:0")
-    region = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
-    llm = ChatBedrock(
-        model_id=model_id,
-        region_name=region,
-        model_kwargs={"temperature": 0.0, "max_tokens": 1024},
-    )
-    return llm.bind_tools(ALL_TOOLS)
+def _tool_definitions() -> list[dict[str, Any]]:
+    """Convert LangChain tools to Backboard's OpenAI-compatible schema."""
+    definitions: list[dict[str, Any]] = []
+    for tool_ in ALL_TOOLS:
+        schema = tool_.args_schema.model_json_schema() if tool_.args_schema else {
+            "type": "object", "properties": {}, "additionalProperties": False,
+        }
+        definitions.append({
+            "type": "function",
+            "function": {
+                "name": tool_.name,
+                "description": tool_.description,
+                "parameters": schema,
+            },
+        })
+    return definitions
 
 
 def _content_text(content: Any) -> str:
@@ -88,33 +86,64 @@ def _content_text(content: Any) -> str:
 
 
 class TargetAgentRunner:
-    """Bounded LangChain loop. Attackers never decide their own verdict."""
+    """Bounded Backboard tool loop. Attackers never decide their own verdict."""
 
     def __init__(self) -> None:
-        self.llm_with_tools = create_target_agent()
         self.tool_map = {tool_.name: tool_ for tool_ in ALL_TOOLS}
         self.system_prompt = SYSTEM_PROMPT
+        self.api_key = os.getenv("BACKBOARD_API_KEY", "").strip()
+        self.base_url = os.getenv("BACKBOARD_BASE_URL", "https://app.backboard.io/api").rstrip("/")
+        self.provider = os.getenv("BACKBOARD_LLM_PROVIDER", "openrouter")
+        self.model = os.getenv("BACKBOARD_MODEL_NAME", "moonshotai/kimi-k2.6")
+        if not self.api_key:
+            raise RuntimeError("BACKBOARD_API_KEY is required for CompanyBot")
+
+    def _request(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = httpx.post(
+            f"{self.base_url}/{path.lstrip('/')}",
+            headers={"X-API-Key": self.api_key, "Content-Type": "application/json"},
+            json=payload,
+            timeout=float(os.getenv("BACKBOARD_TIMEOUT_SECONDS", "60")),
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not isinstance(body, dict):
+            raise RuntimeError("Backboard returned an invalid response")
+        return body
 
     def invoke(self, user_message: str) -> str:
-        messages: list[Any] = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=user_message),
-        ]
+        result = self._request("threads/messages", {
+            "content": user_message,
+            "system_prompt": self.system_prompt,
+            "llm_provider": self.provider,
+            "model_name": self.model,
+            "tools": _tool_definitions(),
+            "stream": False,
+        })
         for _ in range(5):
-            response = self.llm_with_tools.invoke(messages)
-            messages.append(response)
-            if not response.tool_calls:
-                return _content_text(response.content) or "(empty response)"
-            for tool_call in response.tool_calls:
-                name, args = tool_call["name"], tool_call["args"]
+            if result.get("status") != "REQUIRES_ACTION" or not result.get("tool_calls"):
+                return _content_text(result.get("content", "")) or "(empty response)"
+            outputs: list[dict[str, str]] = []
+            for tool_call in result["tool_calls"]:
+                function = tool_call.get("function", {})
+                name = function.get("name", "")
+                raw_args = function.get("arguments", "{}")
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                except json.JSONDecodeError:
+                    args = {}
                 tool_ = self.tool_map.get(name)
                 if tool_ is None:
-                    result = f"Unknown tool: {name}"
+                    output = f"Unknown tool: {name}"
                 else:
                     try:
-                        result = tool_.invoke(args)
+                        output = tool_.invoke(args)
                     except Exception as exc:  # tool errors become evidence, not crashes
-                        result = f"Tool error: {exc}"
-                messages.append(ToolMessage(content=str(result), tool_call_id=tool_call["id"]))
-        return _content_text(messages[-1].content) if messages else "(agent loop exhausted)"
-
+                        output = f"Tool error: {exc}"
+                outputs.append({"tool_call_id": tool_call.get("id", ""), "output": str(output)})
+            result = self._request("threads/tool-outputs", {
+                "thread_id": result.get("thread_id"),
+                "tool_outputs": outputs,
+                "stream": False,
+            })
+        return "(agent loop exhausted)"

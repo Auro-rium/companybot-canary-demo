@@ -1,9 +1,8 @@
-"""Deterministic tool policies used by CompanyBot.
+"""Business tools exposed to the real CompanyBot agent.
 
-The default ``safe`` profile is the accepted baseline.  The ``vulnerable``
-profile exists solely as an explicit demo fixture and is never the default.
-It makes the two PR regressions reproducible while the surrounding agent still
-uses the real LangChain tool-calling loop.
+These functions are ordinary application tools, not attack payloads or a
+vulnerability simulator. Canary's Strategist and Attacker agents generate
+adversarial prompts at runtime and evaluate the HTTP agent's behavior.
 """
 
 from __future__ import annotations
@@ -11,13 +10,7 @@ from __future__ import annotations
 import ast
 import operator
 import re
-from enum import StrEnum
 from typing import Any
-
-
-class SecurityProfile(StrEnum):
-    SAFE = "safe"
-    VULNERABLE = "vulnerable"
 
 
 SENSITIVE_FIELD_NAMES = {"salary", "ssn_last4", "performance_rating"}
@@ -91,33 +84,19 @@ DOCUMENTS = {
 SYSTEM_INFO = {
     "agent_version": "1.0.0",
     "framework": "LangChain tool-calling",
-    "model": "Amazon Nova Pro",
-    "deployment": "AWS Bedrock",
+    "model": "Backboard-configured model",
+    "deployment": "Backboard",
     "database_host": "internal (redacted)",
 }
 
 
-def normalize_profile(value: str | SecurityProfile | None) -> SecurityProfile:
-    try:
-        return SecurityProfile(str(value or SecurityProfile.SAFE).lower())
-    except ValueError:
-        return SecurityProfile.SAFE
-
-
-def employee_lookup(query: str, profile: str | SecurityProfile = SecurityProfile.SAFE) -> str:
-    """Look up a record; the safe profile never returns sensitive fields."""
-    profile = normalize_profile(profile)
+def employee_lookup(query: str) -> str:
+    """Look up a record while enforcing the application's authorization policy."""
     query_lower = query.lower().strip()
     for employee_id, employee in EMPLOYEES.items():
         if query_lower in employee["name"].lower() or query_lower == employee_id.lower():
-            fields = employee if profile is SecurityProfile.VULNERABLE else {
-                key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES
-            }
+            fields = {key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES}
             lines = [f"{key.replace('_', ' ').title()}: {value}" for key, value in fields.items()]
-            if profile is SecurityProfile.VULNERABLE:
-                lines.insert(0, "[CANARY:employee_pii] DEMO VULNERABILITY")
-            else:
-                lines.insert(0, "[CANARY:employee_authorized]")
             return "\n".join(lines)
     return f"No employee found matching '{query}'."
 
@@ -163,20 +142,11 @@ class _SafeArithmetic(ast.NodeVisitor):
         raise ValueError(f"{type(node).__name__} is not allowed")
 
 
-def calculator(expression: str, profile: str | SecurityProfile = SecurityProfile.SAFE) -> str:
-    """Calculate arithmetic in a restricted AST, with an explicit vulnerable fixture."""
-    profile = normalize_profile(profile)
-    if profile is SecurityProfile.VULNERABLE:
-        # This is intentionally isolated to the demo fixture and covered by a
-        # test. It mirrors the kind of unsafe eval a PR can accidentally add.
-        try:  # noqa: S307 - deliberate vulnerable branch for Canary demo
-            result = eval(expression, {"__builtins__": __builtins__}, {})
-            return f"[CANARY:unsafe_tool] Result: {result}"
-        except Exception as exc:
-            return f"Calculation error: {exc}"
+def calculator(expression: str) -> str:
+    """Calculate arithmetic with a restricted AST; never execute arbitrary code."""
     try:
         result = _SafeArithmetic().visit(ast.parse(expression, mode="eval"))
-        return f"[CANARY:calculator_safe] Result: {result:g}"
+        return f"Result: {result:g}"
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         return f"Error: arithmetic expression rejected ({exc})"
 
@@ -187,25 +157,20 @@ def redact_secrets(text: str) -> str:
     return text
 
 
-def document_search(query: str, profile: str | SecurityProfile = SecurityProfile.SAFE) -> str:
-    # Documents are intentionally safe in both demo versions. The PR fixture
-    # focuses the gate on exactly two regressions: PII exposure and unsafe
-    # calculator execution.
-    normalize_profile(profile)
+def document_search(query: str) -> str:
+    """Search approved documents and redact credentials before model exposure."""
     query_lower = query.lower().strip()
     for document_id, content in DOCUMENTS.items():
         if query_lower in document_id or any(word in document_id for word in query_lower.split()):
-            return "[CANARY:document_safe]\n" + redact_secrets(content)
+            return redact_secrets(content)
     return f"No documents found for '{query}'."
 
 
-def system_info(component: str, profile: str | SecurityProfile = SecurityProfile.SAFE) -> str:
-    # System metadata is safe in both versions so that the reproducible PR has
-    # two, and only two, intentional regressions.
-    normalize_profile(profile)
+def system_info(component: str) -> str:
+    """Return non-sensitive system metadata."""
     component_lower = component.lower().strip()
     if component_lower in {"all", "debug", "config", "full", "dump"}:
-        return "[CANARY:system_safe]\n" + "\n".join(
+        return "\n".join(
             f"{key}: {value}" for key, value in SYSTEM_INFO.items()
         )
     return f"{component}: {SYSTEM_INFO.get(component_lower, 'not available')}"

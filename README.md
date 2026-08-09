@@ -1,6 +1,6 @@
 # CompanyBot Canary Demo
 
-CompanyBot is a real LangChain tool-calling agent backed by Amazon Bedrock.
+CompanyBot is a real LangChain tool-calling agent backed by Backboard.
 It is the separate application repository used to demonstrate Agent Canary's
 CI security gate:
 
@@ -9,10 +9,30 @@ PR opened -> Railway preview -> Canary attacks candidate
           -> accepted main baseline replay -> evidence -> PASS/WARN/BLOCK
 ```
 
-The trusted `main` branch is safe by default. It filters sensitive employee
-fields, redacts document secrets, and evaluates calculator expressions with a
-restricted Python AST. Canary's Evaluator, not the attacker, decides whether
-the behavior is a vulnerability.
+CompanyBot is a real model-driven agent. The model selects tools at runtime,
+receives tool results, and produces the final answer. The tools enforce normal
+application authorization and data-redaction rules; there is no deterministic
+attack-payload library and no `vulnerable` profile switch. Canary's own
+Strategist and Attacker agents generate adversarial prompts at runtime, while
+Canary's Evaluator decides whether the resulting HTTP behavior is unsafe.
+
+## Current deployment status
+
+The CompanyBot repository contains the deployable HTTP target and Railway
+configuration, but a live CompanyBot Railway deployment has not been claimed by
+this repository yet. Deploy it as a public HTTPS service before running the
+ownership verification or PR workflow. Its required runtime secret is the
+server-side `BACKBOARD_API_KEY`.
+
+The Canary API is currently live separately at:
+
+```text
+http://13.206.233.65
+```
+
+Its health endpoint is `GET /health`. The CompanyBot target must be deployed
+separately and then supplied to Canary as `CANARY_TARGET_URL`; the trusted main
+deployment is supplied as `CANARY_BASELINE_URL`.
 
 ## Run locally
 
@@ -27,45 +47,20 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message":"Look up Alice Chen without exposing sensitive fields."}'
 ```
 
-Normal chat requests invoke Amazon Nova Pro through Bedrock. Configure AWS
-credentials through the standard boto3 credential chain; never commit keys.
-`AWS_DEFAULT_REGION` defaults to `us-west-2`, and `TARGET_MODEL_ID` defaults to
-`us.amazon.nova-pro-v1:0`.
-
-## Reproduce the security regression PR
-
-The `demo/vulnerable.patch` is a deliberately small code change that changes
-the default security profile. Apply it on a feature branch, push the branch,
-and let Railway create the PR environment:
-
-```bash
-git checkout -b demo/companybot-regression
-git apply demo/vulnerable.patch
-git add src/companybot/agent.py
-git commit -m 'demo: introduce agent security regressions'
-git push -u origin demo/companybot-regression
-```
-
-The resulting PR is expected to produce a Canary `BLOCK` with sensitive-data
-and unsafe-tool evidence. Revert/close the PR and push the safe implementation
-again; the same attack cases should produce `PASS`.
-
-The vulnerable profile is also directly testable without Bedrock:
-
-```bash
-COMPANYBOT_SECURITY_PROFILE=vulnerable pytest
-```
-
-This fixture is for a controlled demo only and must not be used in a deployed
-trusted environment.
+Normal chat requests use Backboard tool calling with the configured provider/model.
+Create a key in Backboard Dashboard → Settings → API Keys and set it only in the
+server environment; never commit it. `BACKBOARD_LLM_PROVIDER` defaults to
+`openrouter`, and `BACKBOARD_MODEL_NAME` defaults to `moonshotai/kimi-k2.6`.
 
 ## Railway deployment
 
 Railway builds `Dockerfile`, injects `$PORT`, and probes `/health`.
-Provision a public domain for the base environment so Railway can create a
-temporary PR environment domain. Set the Bedrock region/model and AWS role or
-credentials in Railway variables. For Canary ownership verification, the
-`/chat` endpoint echoes the `X-Canary-Verification` header.
+Provision a public HTTPS domain for the base environment so Railway can create
+a temporary PR environment domain. Set the Backboard variables in Railway:
+`BACKBOARD_API_KEY`, `BACKBOARD_BASE_URL`, `BACKBOARD_LLM_PROVIDER`,
+`BACKBOARD_MODEL_NAME`, and optionally `BACKBOARD_TIMEOUT_SECONDS`. For Canary
+ownership verification, the `/chat` endpoint echoes the
+`X-Canary-Verification` header.
 
 The workflow needs these values:
 
@@ -77,6 +72,20 @@ The workflow needs these values:
 
 The Canary project token is scoped to this project and is only available to
 GitHub Actions. It is never exposed to the browser.
+
+After deployment, verify the target before running a release gate:
+
+```bash
+curl https://<companybot-domain>/health
+curl https://<companybot-domain>/info
+curl -X POST https://<companybot-domain>/chat \
+  -H 'content-type: application/json' \
+  -d '{"message":"What tools are available?"}'
+```
+
+The last request makes a real Backboard model call. A missing or invalid
+Backboard key must fail the request rather than silently turning the target into
+a deterministic mock.
 
 ## API
 
