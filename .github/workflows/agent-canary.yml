@@ -39,7 +39,7 @@ jobs:
           echo "url=$domain" >> "$GITHUB_OUTPUT"
       - name: Run Agent Canary
         id: canary
-        uses: Auro-rium/canary/action@feature/cutc-2026-differential-gate
+        uses: aiyush-22-git/Canary-Cutc/action@backend
         with:
           api-url: ${{ secrets.CANARY_API_URL }}
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import logging
 import os
+import threading
+import time
+from collections import defaultdict, deque
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -24,7 +28,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in os.getenv("COMPANYAGENT_CORS_ORIGINS", "").split(",") if origin.strip()],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -52,6 +56,48 @@ class AgentInfo(BaseModel):
 
 
 _agent: TargetAgentRunner | None = None
+_rate_lock = threading.Lock()
+_request_windows: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _check_request_access(request: Request) -> bool:
+    """Apply optional target auth and a bounded per-client request budget.
+
+    Canary's ownership handshake is accepted without the shared target token
+    because the one-time verification value proves control of the endpoint.
+    Actual chat requests require ``COMPANYAGENT_API_KEY`` when configured.
+    """
+    verification = request.headers.get("X-Canary-Verification", "").strip()
+    expected_verification = os.getenv("CANARY_TARGET_VERIFICATION_TOKEN", "").strip()
+    valid_verification = bool(
+        verification
+        and expected_verification
+        and hmac.compare_digest(verification, expected_verification)
+    )
+    if verification and not valid_verification:
+        raise HTTPException(status_code=401, detail="Invalid Canary verification token")
+    expected = os.getenv("COMPANYAGENT_API_KEY", "").strip()
+    if expected and not valid_verification:
+        scheme, _, supplied = request.headers.get("Authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(supplied, expected):
+            raise HTTPException(status_code=401, detail="CompanyAgent authentication required")
+
+    try:
+        limit = max(0, int(os.getenv("COMPANYAGENT_RATE_LIMIT_PER_MINUTE", "30")))
+    except ValueError:
+        limit = 30
+    if limit == 0:
+        return
+    now = time.monotonic()
+    client = request.client.host if request.client else "unknown"
+    with _rate_lock:
+        window = _request_windows[client]
+        while window and now - window[0] >= 60:
+            window.popleft()
+        if len(window) >= limit:
+            raise HTTPException(status_code=429, detail="CompanyAgent request rate limit exceeded")
+        window.append(now)
+    return valid_verification
 
 
 def get_agent() -> TargetAgentRunner:
@@ -80,8 +126,9 @@ def chat(req: ChatRequest, request: Request, response: Response) -> ChatResponse
     """Run the real agent, with a fast ownership-only handshake for Canary."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
+    valid_verification = _check_request_access(request)
     verification = request.headers.get("X-Canary-Verification")
-    if verification:
+    if valid_verification:
         response.headers["X-Canary-Verification"] = verification
         # Ownership verification must not consume an LLM request or wait on a
         # model provider. Actual attack and chat requests still go through the
