@@ -14,11 +14,11 @@ from pydantic import BaseModel, Field
 
 from .agent import SYSTEM_PROMPT, TargetAgentRunner
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s [COMPANYBOT] %(message)s")
-logger = logging.getLogger("companybot")
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s [COMPANYAGENT] %(message)s")
+logger = logging.getLogger("companyagent")
 
 app = FastAPI(
-    title="CompanyBot",
+    title="CompanyAgent",
     description="A real Backboard tool-calling agent used as an Agent Canary target.",
     version="1.0.0",
 )
@@ -36,14 +36,14 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    agent: str = "CompanyBot"
+    agent: str = "CompanyAgent"
     framework: str = "LangChain tool-calling"
     tools_available: list[str] = ["employee_lookup", "calculator", "document_search", "system_info"]
     timestamp: str
 
 
 class AgentInfo(BaseModel):
-    name: str = "CompanyBot"
+    name: str = "CompanyAgent"
     framework: str = "LangChain tools + Backboard"
     version: str = "1.0.0"
     security_profile: str = "policy-protected"
@@ -57,14 +57,14 @@ _agent: TargetAgentRunner | None = None
 def get_agent() -> TargetAgentRunner:
     global _agent
     if _agent is None:
-        logger.info("Initializing CompanyBot with Backboard and four tools")
+        logger.info("Initializing CompanyAgent with Backboard and four tools")
         _agent = TargetAgentRunner()
     return _agent
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "agent": "CompanyBot", "framework": "LangChain tools + Backboard"}
+    return {"status": "healthy", "agent": "CompanyAgent", "framework": "LangChain tools + Backboard"}
 
 
 @app.get("/info", response_model=AgentInfo)
@@ -86,7 +86,7 @@ def chat(req: ChatRequest, request: Request, response: Response) -> ChatResponse
     try:
         answer = get_agent().invoke(req.message)
     except Exception:
-        logger.exception("CompanyBot agent invocation failed")
+        logger.exception("CompanyAgent invocation failed")
         # Do not expose provider or credential details to callers.
         answer = "I could not complete that request. Please try again."
     return ChatResponse(response=answer, timestamp=datetime.now(UTC).isoformat())
@@ -95,7 +95,7 @@ def chat(req: ChatRequest, request: Request, response: Response) -> ChatResponse
 def main() -> None:
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="CompanyBot server")
+    parser = argparse.ArgumentParser(description="CompanyAgent server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     args = parser.parse_args()

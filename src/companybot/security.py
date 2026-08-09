@@ -1,4 +1,4 @@
-"""Business tools exposed to the real CompanyBot agent.
+"""Business tools exposed to the real CompanyAgent agent.
 
 These functions are ordinary application tools, not attack payloads or a
 vulnerability simulator. Canary's Strategist and Attacker agents generate

@@ -1,6 +1,6 @@
-# CompanyBot Canary Demo
+# CompanyAgent Canary Demo
 
-CompanyBot is a real LangChain tool-calling agent backed by Backboard.
+CompanyAgent is a real LangChain tool-calling agent backed by Backboard.
 It is the separate application repository used to demonstrate Agent Canary's
 CI security gate:
 
@@ -9,7 +9,7 @@ PR opened -> Railway preview -> Canary attacks candidate
           -> accepted main baseline replay -> evidence -> PASS/WARN/BLOCK
 ```
 
-CompanyBot is a real model-driven agent. The model selects tools at runtime,
+CompanyAgent is a real model-driven agent. The model selects tools at runtime,
 receives tool results, and produces the final answer. The tools enforce normal
 application authorization and data-redaction rules; there is no deterministic
 attack-payload library and no `vulnerable` profile switch. Canary's own
@@ -18,8 +18,8 @@ Canary's Evaluator decides whether the resulting HTTP behavior is unsafe.
 
 ## Current deployment status
 
-The CompanyBot repository contains the deployable HTTP target and Railway
-configuration, but a live CompanyBot Railway deployment has not been claimed by
+The CompanyAgent repository contains the deployable HTTP target and Railway
+configuration, but a live CompanyAgent Railway deployment has not been claimed by
 this repository yet. Deploy it as a public HTTPS service before running the
 ownership verification or PR workflow. Its required runtime secret is the
 server-side `BACKBOARD_API_KEY`.
@@ -30,7 +30,7 @@ The Canary API is currently live separately at:
 http://13.206.233.65
 ```
 
-Its health endpoint is `GET /health`. The CompanyBot target must be deployed
+Its health endpoint is `GET /health`. The CompanyAgent target must be deployed
 separately and then supplied to Canary as `CANARY_TARGET_URL`; the trusted main
 deployment is supplied as `CANARY_BASELINE_URL`.
 
@@ -67,7 +67,7 @@ The workflow needs these values:
 - Secrets: `RAILWAY_TOKEN`, `CANARY_API_URL`, `CANARY_PROJECT_TOKEN`, and
   `CANARY_TARGET_VERIFICATION_TOKEN`.
 - Variables: `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID`,
-  `CANARY_BASELINE_URL` (the trusted main CompanyBot base URL), and optionally
+  `CANARY_BASELINE_URL` (the trusted main CompanyAgent base URL), and optionally
   `RAILWAY_PR_ENVIRONMENT`.
 
 The Canary project token is scoped to this project and is only available to
@@ -76,9 +76,9 @@ GitHub Actions. It is never exposed to the browser.
 After deployment, verify the target before running a release gate:
 
 ```bash
-curl https://<companybot-domain>/health
-curl https://<companybot-domain>/info
-curl -X POST https://<companybot-domain>/chat \
+curl https://<companyagent-domain>/health
+curl https://<companyagent-domain>/info
+curl -X POST https://<companyagent-domain>/chat \
   -H 'content-type: application/json' \
   -d '{"message":"What tools are available?"}'
 ```

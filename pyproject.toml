@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "companybot-canary-demo"
 version = "1.0.0"
-description = "A real LangChain tool-calling agent using Backboard as Canary's PR security-gate demo target."
+description = "CompanyAgent: a real LangChain tool-calling agent using Backboard as Canary's PR security-gate demo target."
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "fastapi>=0.110.0",
@@ -30,4 +30,3 @@ packages = ["src/companybot"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-

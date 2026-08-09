@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  companybot-preview:
+  companyagent-preview:
     runs-on: ubuntu-latest
     # Railway creates a temporary PR environment from the repository's base
     # environment. Set RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID, and
