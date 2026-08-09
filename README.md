@@ -19,12 +19,11 @@ Canary's Evaluator decides whether the resulting HTTP behavior is unsafe.
 ## Current deployment status
 
 The CompanyAgent repository contains the deployable HTTP target and Railway
-configuration, but a live CompanyAgent Railway deployment has not been claimed by
-this repository yet. Deploy it as a public HTTPS service before running the
-ownership verification or PR workflow. Its required runtime secret is the
-server-side `BACKBOARD_API_KEY`.
+configuration. A dedicated AWS EC2 deployment is currently running for the
+hackathon demo. Its required runtime secret is the server-side
+`BACKBOARD_API_KEY`.
 
-The Canary API is currently live separately at:
+The Canary API is live separately at:
 
 ```text
 http://13.206.233.65
@@ -33,6 +32,22 @@ http://13.206.233.65
 Its health endpoint is `GET /health`. The CompanyAgent target must be deployed
 separately and then supplied to Canary as `CANARY_TARGET_URL`; the trusted main
 deployment is supplied as `CANARY_BASELINE_URL`.
+
+Current CompanyAgent deployment:
+
+```text
+http://13.201.9.115
+```
+
+Endpoints:
+
+- `GET http://13.201.9.115/health`
+- `GET http://13.201.9.115/info`
+- `POST http://13.201.9.115/chat`
+
+The instance is separate from Canary, runs the FastAPI app in Docker, and stores
+its Backboard environment file as root-only (`0600`) data. The endpoint is HTTP
+for the current demo; production use should place it behind HTTPS.
 
 ## Run locally
 
