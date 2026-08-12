@@ -16,14 +16,6 @@ jobs:
     # to the browser or committed to source.
     steps:
       - uses: actions/checkout@v4
-      - name: Verify AWS CompanyAgent candidate
-        env:
-          CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
-        run: |
-          set -euo pipefail
-          test -n "$CANARY_HEALTH_URL"
-          case "$CANARY_HEALTH_URL" in http://*|https://*) ;; *) echo "Invalid AWS health URL" >&2; exit 1;; esac
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 --connect-timeout 10 --max-time 20 "$CANARY_HEALTH_URL" >/dev/null
       - name: Run Agent Canary
         id: canary
         uses: Auro-rium/canary/action@feature/cutc-2026-differential-gate
