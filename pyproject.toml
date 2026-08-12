@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 companybot = "companybot.server:main"
+companybot-candidate = "companybot.candidate_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/companybot"]
