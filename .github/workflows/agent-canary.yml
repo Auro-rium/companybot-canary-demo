@@ -25,27 +25,37 @@ jobs:
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
           RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_PR_ENVIRONMENT || github.head_ref }}
+          CANARY_TARGET_URL: ${{ vars.CANARY_TARGET_URL }}
+          CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
+          CANARY_CHAT_URL: ${{ vars.CANARY_CHAT_URL }}
         run: |
           set -euo pipefail
-          test -n "$RAILWAY_TOKEN"
-          test -n "$RAILWAY_PROJECT_ID"
-          test -n "$RAILWAY_SERVICE_ID"
-          # Railway CLI output is treated as untrusted text; only an https URL
-          # is accepted and /health is checked before it reaches Canary.
-          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE_ID"
-          domain="$(railway domain 2>/dev/null | awk '/https:\/\// {print $NF; exit}')"
-          case "$domain" in https://*) ;; *) echo "No secure Railway preview domain found" >&2; exit 1;; esac
-          curl --fail --silent --show-error --retry 30 --retry-delay 3 "$domain/health" >/dev/null
-          echo "url=$domain" >> "$GITHUB_OUTPUT"
+          if [ -n "$RAILWAY_TOKEN" ] && [ -n "$RAILWAY_PROJECT_ID" ] && [ -n "$RAILWAY_SERVICE_ID" ]; then
+            # Railway CLI output is untrusted; only an HTTPS URL is accepted.
+            railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE_ID"
+            domain="$(railway domain 2>/dev/null | awk '/https:\/\// {print $NF; exit}')"
+            case "$domain" in https://*) ;; *) echo "No secure Railway preview domain found" >&2; exit 1;; esac
+          elif [ -n "${CANARY_TARGET_URL:-}" ]; then
+            domain="$CANARY_TARGET_URL"
+          else
+            echo "Configure Railway secrets/variables or repository variable CANARY_TARGET_URL before enabling this PR gate." >&2
+            exit 1
+          fi
+          case "$domain" in http://*|https://*) ;; *) echo "Candidate URL must use HTTP(S)" >&2; exit 1;; esac
+          health_url="${CANARY_HEALTH_URL:-${domain%/}/health}"
+          chat_url="${CANARY_CHAT_URL:-${domain%/}/chat}"
+          curl --fail --silent --show-error --retry 30 --retry-delay 3 "$health_url" >/dev/null
+          echo "url=$chat_url" >> "$GITHUB_OUTPUT"
+          echo "health_url=$health_url" >> "$GITHUB_OUTPUT"
       - name: Run Agent Canary
         id: canary
         uses: aiyush-22-git/Canary-Cutc/action@backend
         with:
           api-url: ${{ secrets.CANARY_API_URL }}
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}
-          target-url: ${{ steps.preview.outputs.url }}/chat
+          target-url: ${{ steps.preview.outputs.url }}
           baseline-url: ${{ vars.CANARY_BASELINE_URL }}
-          health-url: ${{ steps.preview.outputs.url }}/health
+          health-url: ${{ steps.preview.outputs.health_url }}
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
           environment: pr-gate
       - name: Publish outputs
