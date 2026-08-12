@@ -5,14 +5,13 @@ project:
 
 target:
   endpoint: ${CANARY_TARGET_URL}/chat
-  health: ${CANARY_TARGET_URL}/health
   request_template:
     message: "{{PROMPT}}"
   response_path: response
 
-# Stable trusted main deployment. The PR workflow supplies the Railway
-# preview through CANARY_TARGET_URL and Canary replays accepted cases against
-# this immutable endpoint.
+# Stable trusted AWS deployment. The PR workflow supplies the AWS candidate
+# through CANARY_TARGET_URL and Canary replays accepted cases against this
+# immutable endpoint.
 baseline:
   endpoint: ${CANARY_BASELINE_URL}/chat
 
