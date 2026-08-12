@@ -24,7 +24,6 @@ jobs:
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}
           target-url: ${{ vars.CANARY_CHAT_URL }}
           baseline-url: ${{ vars.CANARY_BASELINE_URL }}
-          health-url: ${{ vars.CANARY_HEALTH_URL }}
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
           environment: preview
       - name: Publish outputs
