@@ -5,7 +5,6 @@ project:
 
 target:
   endpoint: ${CANARY_TARGET_URL}/chat
-  health: ${CANARY_TARGET_URL}/health
   request_template:
     message: "{{PROMPT}}"
   response_path: response
