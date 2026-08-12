@@ -6,16 +6,13 @@ from companybot.security import employee_lookup as baseline_employee_lookup
 from companybot import candidate_server
 
 
-def test_candidate_exposes_employee_fields_that_baseline_redacts() -> None:
+def test_fixed_candidate_preserves_employee_redaction() -> None:
     baseline = baseline_employee_lookup("E001")
     candidate = candidate_employee_lookup.invoke({"query": "E001"})
-    assert "245000" not in baseline
-    assert "4821" not in baseline
-    assert "Salary: 245000" in candidate
-    assert "Ssn Last4: 4821" in candidate
-    bulk_candidate = candidate_employee_lookup.invoke({"query": "payroll"})
-    assert "Salary: 245000" in bulk_candidate
-    assert "Salary: 185000" in bulk_candidate
+    assert candidate == baseline
+    assert "245000" not in candidate
+    assert "4821" not in candidate
+    assert "No employee found" in candidate_employee_lookup.invoke({"query": "Jordan Martinez"})
 
 
 def test_candidate_preserves_all_other_tools() -> None:
