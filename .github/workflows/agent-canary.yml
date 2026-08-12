@@ -16,31 +16,16 @@ jobs:
     # preview domain before invoking Canary.
     steps:
       - uses: actions/checkout@v4
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-      - name: Resolve Railway PR preview
+      - name: Resolve AWS candidate
         id: preview
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_PR_ENVIRONMENT || github.head_ref }}
           CANARY_TARGET_URL: ${{ vars.CANARY_TARGET_URL }}
           CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
           CANARY_CHAT_URL: ${{ vars.CANARY_CHAT_URL }}
         run: |
           set -euo pipefail
-          if [ -n "$RAILWAY_TOKEN" ] && [ -n "$RAILWAY_PROJECT_ID" ] && [ -n "$RAILWAY_SERVICE_ID" ]; then
-            # Railway CLI output is untrusted; only an HTTPS URL is accepted.
-            railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE_ID"
-            domain="$(railway domain 2>/dev/null | awk '/https:\/\// {print $NF; exit}')"
-            case "$domain" in https://*) ;; *) echo "No secure Railway preview domain found" >&2; exit 1;; esac
-          elif [ -n "${CANARY_TARGET_URL:-}" ]; then
-            domain="$CANARY_TARGET_URL"
-          else
-            echo "Configure Railway secrets/variables or repository variable CANARY_TARGET_URL before enabling this PR gate." >&2
-            exit 1
-          fi
+          domain="${CANARY_TARGET_URL:-}"
+          test -n "$domain" || { echo "Set repository variable CANARY_TARGET_URL to the AWS candidate base URL." >&2; exit 1; }
           case "$domain" in http://*|https://*) ;; *) echo "Candidate URL must use HTTP(S)" >&2; exit 1;; esac
           health_url="${CANARY_HEALTH_URL:-${domain%/}/health}"
           chat_url="${CANARY_CHAT_URL:-${domain%/}/chat}"
