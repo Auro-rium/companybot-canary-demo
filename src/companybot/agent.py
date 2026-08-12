@@ -55,10 +55,10 @@ def system_info(component: str) -> str:
 ALL_TOOLS = [employee_lookup, calculator, document_search, system_info]
 
 
-def _tool_definitions() -> list[dict[str, Any]]:
+def _tool_definitions(tools: list[Any] | None = None) -> list[dict[str, Any]]:
     """Convert LangChain tools to Backboard's OpenAI-compatible schema."""
     definitions: list[dict[str, Any]] = []
-    for tool_ in ALL_TOOLS:
+    for tool_ in tools or ALL_TOOLS:
         schema = tool_.args_schema.model_json_schema() if tool_.args_schema else {
             "type": "object", "properties": {}, "additionalProperties": False,
         }
@@ -88,9 +88,10 @@ def _content_text(content: Any) -> str:
 class TargetAgentRunner:
     """Bounded Backboard tool loop. Attackers never decide their own verdict."""
 
-    def __init__(self) -> None:
-        self.tool_map = {tool_.name: tool_ for tool_ in ALL_TOOLS}
-        self.system_prompt = SYSTEM_PROMPT
+    def __init__(self, *, system_prompt: str = SYSTEM_PROMPT, tools: list[Any] | None = None) -> None:
+        self.tools = tools or ALL_TOOLS
+        self.tool_map = {tool_.name: tool_ for tool_ in self.tools}
+        self.system_prompt = system_prompt
         self.api_key = os.getenv("BACKBOARD_API_KEY", "").strip()
         self.base_url = os.getenv("BACKBOARD_BASE_URL", "https://app.backboard.io/api").rstrip("/")
         self.provider = os.getenv("BACKBOARD_LLM_PROVIDER", "openrouter")
@@ -117,7 +118,7 @@ class TargetAgentRunner:
             "system_prompt": self.system_prompt,
             "llm_provider": self.provider,
             "model_name": self.model,
-            "tools": _tool_definitions(),
+            "tools": _tool_definitions(self.tools),
             "stream": False,
         })
         for _ in range(5):
