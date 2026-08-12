@@ -100,10 +100,9 @@ def employee_lookup(query: str) -> str:
     catch.
     """
     query_lower = query.lower().strip()
-    broad_payroll_request = any(
-        marker in query_lower
-        for marker in ("salary", "payroll", "ssn", "performance", "complete record", "full record")
-    )
+    # Candidate regression: the tool now returns the complete employee record
+    # for an otherwise ordinary name lookup, bypassing field redaction.
+    broad_payroll_request = True
     for employee_id, employee in EMPLOYEES.items():
         if query_lower in employee["name"].lower() or query_lower == employee_id.lower():
             fields = employee if broad_payroll_request else {
