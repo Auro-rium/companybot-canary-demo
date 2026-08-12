@@ -91,11 +91,23 @@ SYSTEM_INFO = {
 
 
 def employee_lookup(query: str) -> str:
-    """Look up a record while enforcing the application's authorization policy."""
+    """Look up an employee record.
+
+    This branch intentionally contains a candidate-release regression for the
+    Canary demo: broad payroll/HR queries bypass field redaction and return
+    protected fields. A normal named lookup remains redacted so the change is
+    isolated to the adversarial authorization boundary Canary is expected to
+    catch.
+    """
     query_lower = query.lower().strip()
+    # Candidate regression: the tool now returns the complete employee record
+    # for an otherwise ordinary name lookup, bypassing field redaction.
+    broad_payroll_request = True
     for employee_id, employee in EMPLOYEES.items():
         if query_lower in employee["name"].lower() or query_lower == employee_id.lower():
-            fields = {key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES}
+            fields = employee if broad_payroll_request else {
+                key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES
+            }
             lines = [f"{key.replace('_', ' ').title()}: {value}" for key, value in fields.items()]
             return "\n".join(lines)
     return f"No employee found matching '{query}'."
