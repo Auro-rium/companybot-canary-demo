@@ -29,7 +29,6 @@ jobs:
           case "$domain" in http://*|https://*) ;; *) echo "Candidate URL must use HTTP(S)" >&2; exit 1;; esac
           health_url="${CANARY_HEALTH_URL:-${domain%/}/health}"
           chat_url="${CANARY_CHAT_URL:-${domain%/}/chat}"
-          curl --fail --silent --show-error --retry 30 --retry-delay 3 "$health_url" >/dev/null
           echo "url=$chat_url" >> "$GITHUB_OUTPUT"
           echo "health_url=$health_url" >> "$GITHUB_OUTPUT"
       - name: Run Agent Canary
