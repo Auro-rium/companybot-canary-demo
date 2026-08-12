@@ -2,6 +2,8 @@ name: Agent Canary Security Gate
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,10 +12,8 @@ permissions:
 jobs:
   companyagent-preview:
     runs-on: ubuntu-latest
-    # CompanyAgent is hosted on AWS. The baseline remains on port 80 and the
-    # candidate deployment is exposed on the restricted port 8080. The URLs
-    # are repository variables so no target or Canary credentials are exposed
-    # to the browser or committed to source.
+    # CompanyAgent is hosted on AWS. Canary reaches the candidate from its AWS
+    # backend; the candidate port is intentionally restricted to that source.
     steps:
       - uses: actions/checkout@v4
       - name: Run Agent Canary
