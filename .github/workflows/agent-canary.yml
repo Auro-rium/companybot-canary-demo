@@ -38,6 +38,7 @@ jobs:
           api-url: ${{ secrets.CANARY_API_URL }}
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}
           target-url: ${{ steps.preview.outputs.url }}
+          # This variable is the trusted baseline host; canary.yaml appends /chat.
           baseline-url: ${{ vars.CANARY_BASELINE_URL }}
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
           environment: preview
