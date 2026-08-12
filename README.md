@@ -16,12 +16,43 @@ attack-payload library and no `vulnerable` profile switch. Canary's own
 Strategist and Attacker agents generate adversarial prompts at runtime, while
 Canary's Evaluator decides whether the resulting HTTP behavior is unsafe.
 
+## How the synchronized system works
+
+CompanyAgent is only the target service. It does not contain Canary's attack
+engine and it does not decide whether an attack succeeded.
+
+```text
+GitHub PR
+   |
+   v
+Canary API  --HTTP attack-->  CompanyAgent /chat  --Backboard-->  model
+   |
+   +-- Strategist selects techniques
+   +-- parallel Attackers generate prompts
+   +-- Evaluator judges responses
+   +-- Reporter stores evidence
+   +-- baseline/candidate comparison
+   v
+PASS / WARN / BLOCK
+```
+
+The CompanyAgent `/chat` request is synchronous: it sends the message to
+Backboard, executes any requested local tools, returns tool outputs to
+Backboard, and then returns the final model response. Canary's release API is
+asynchronous: it persists a release, runs the campaign in the background, and
+is polled by GitHub until the decision is complete.
+
 ## Current deployment status
 
 The CompanyAgent repository contains the deployable HTTP target and Railway
 configuration. A dedicated AWS EC2 deployment is currently running for the
 hackathon demo. Its required runtime secret is the server-side
-`BACKBOARD_API_KEY`.
+`BACKBOARD_API_KEY`. For a protected public target, also configure
+`COMPANYAGENT_API_KEY` and set the same value as Canary's server-side
+`TARGET_API_KEY`; it is never sent to the browser or stored in release
+evidence. CompanyAgent applies a per-client request budget through
+`COMPANYAGENT_RATE_LIMIT_PER_MINUTE` (30 by default) to limit accidental model
+spend.
 
 The Canary API is live separately at:
 
@@ -49,6 +80,36 @@ The instance is separate from Canary, runs the FastAPI app in Docker, and stores
 its Backboard environment file as root-only (`0600`) data. The endpoint is HTTP
 for the current demo; production use should place it behind HTTPS.
 
+The current end-to-end demo values are:
+
+```dotenv
+CANARY_API_URL=http://13.206.233.65
+CANARY_TARGET_URL=http://13.201.9.115/chat
+CANARY_BASELINE_URL=<trusted CompanyAgent baseline URL>
+```
+
+### EC2 rollout
+
+The hardened image can be rolled out with the rollback-safe helper after the
+root-owned env file exists on the host. It requires non-empty
+`BACKBOARD_API_KEY`, `COMPANYAGENT_API_KEY`, and
+`CANARY_TARGET_VERIFICATION_TOKEN` entries in that file, and never accepts
+secret values as command-line arguments:
+
+```bash
+EC2_HOST=13.201.9.115 \
+EC2_SSH_KEY=/path/to/key.pem \
+./scripts/rollout_ec2.sh
+```
+
+The helper stops the old container only after loading the new image and
+restores it automatically if `/health` does not become ready. It has not been
+run against the public instance from this branch.
+
+The baseline must be a separately trusted deployment of the same agent and
+environment. Never compare a preview target against an unrelated production
+target by accident.
+
 ## Run locally
 
 ```bash
@@ -73,7 +134,9 @@ Railway builds `Dockerfile`, injects `$PORT`, and probes `/health`.
 Provision a public HTTPS domain for the base environment so Railway can create
 a temporary PR environment domain. Set the Backboard variables in Railway:
 `BACKBOARD_API_KEY`, `BACKBOARD_BASE_URL`, `BACKBOARD_LLM_PROVIDER`,
-`BACKBOARD_MODEL_NAME`, and optionally `BACKBOARD_TIMEOUT_SECONDS`. For Canary
+`BACKBOARD_MODEL_NAME`, and optionally `BACKBOARD_TIMEOUT_SECONDS`. Set
+`COMPANYAGENT_API_KEY` and `COMPANYAGENT_RATE_LIMIT_PER_MINUTE` as server-only
+variables when the target is publicly reachable. For Canary
 ownership verification, the `/chat` endpoint echoes the
 `X-Canary-Verification` header.
 
