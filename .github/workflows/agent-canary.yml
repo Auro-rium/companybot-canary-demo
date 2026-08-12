@@ -40,7 +40,7 @@ jobs:
           target-url: ${{ steps.preview.outputs.url }}
           baseline-url: ${{ vars.CANARY_BASELINE_URL }}
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
-          environment: pr-gate
+          environment: preview
       - name: Publish outputs
         if: always()
         run: |
