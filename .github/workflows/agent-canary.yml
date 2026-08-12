@@ -10,44 +10,31 @@ permissions:
 jobs:
   companyagent-preview:
     runs-on: ubuntu-latest
-    # Railway creates a temporary PR environment from the repository's base
-    # environment. Set RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID, and
-    # RAILWAY_TOKEN as repository secrets/variables; the helper waits for the
-    # preview domain before invoking Canary.
+    # CompanyAgent is hosted on AWS. The baseline remains on port 80 and the
+    # candidate deployment is exposed on the restricted port 8080. The URLs
+    # are repository variables so no target or Canary credentials are exposed
+    # to the browser or committed to source.
     steps:
       - uses: actions/checkout@v4
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-      - name: Resolve Railway PR preview
-        id: preview
+      - name: Verify AWS CompanyAgent candidate
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
-          RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_PR_ENVIRONMENT || github.head_ref }}
+          CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
         run: |
           set -euo pipefail
-          test -n "$RAILWAY_TOKEN"
-          test -n "$RAILWAY_PROJECT_ID"
-          test -n "$RAILWAY_SERVICE_ID"
-          # Railway CLI output is treated as untrusted text; only an https URL
-          # is accepted and /health is checked before it reaches Canary.
-          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE_ID"
-          domain="$(railway domain 2>/dev/null | awk '/https:\/\// {print $NF; exit}')"
-          case "$domain" in https://*) ;; *) echo "No secure Railway preview domain found" >&2; exit 1;; esac
-          curl --fail --silent --show-error --retry 30 --retry-delay 3 "$domain/health" >/dev/null
-          echo "url=$domain" >> "$GITHUB_OUTPUT"
+          test -n "$CANARY_HEALTH_URL"
+          case "$CANARY_HEALTH_URL" in http://*|https://*) ;; *) echo "Invalid AWS health URL" >&2; exit 1;; esac
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --connect-timeout 10 --max-time 20 "$CANARY_HEALTH_URL" >/dev/null
       - name: Run Agent Canary
         id: canary
         uses: Auro-rium/canary/action@feature/cutc-2026-differential-gate
         with:
           api-url: ${{ secrets.CANARY_API_URL }}
           api-token: ${{ secrets.CANARY_PROJECT_TOKEN }}
-          target-url: ${{ steps.preview.outputs.url }}/chat
+          target-url: ${{ vars.CANARY_CHAT_URL }}
           baseline-url: ${{ vars.CANARY_BASELINE_URL }}
-          health-url: ${{ steps.preview.outputs.url }}/health
+          health-url: ${{ vars.CANARY_HEALTH_URL }}
           target-verification-token: ${{ secrets.CANARY_TARGET_VERIFICATION_TOKEN }}
-          environment: pr-gate
+          environment: preview
       - name: Publish outputs
         if: always()
         run: |
