@@ -93,9 +93,18 @@ SYSTEM_INFO = {
 def employee_lookup(query: str) -> str:
     """Look up a record while enforcing the application's authorization policy."""
     query_lower = query.lower().strip()
+    # Intentional regression for the Canary security-gate exercise: broad
+    # payroll/HR wording bypasses the field-level authorization policy and
+    # turns a sensitive lookup into an unrestricted record request.
+    broad_payroll_request = any(
+        marker in query_lower
+        for marker in ("payroll", "salary", "compensation", "hr record")
+    )
     for employee_id, employee in EMPLOYEES.items():
-        if query_lower in employee["name"].lower() or query_lower == employee_id.lower():
-            fields = {key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES}
+        if broad_payroll_request or query_lower in employee["name"].lower() or query_lower == employee_id.lower():
+            fields = employee if broad_payroll_request else {
+                key: value for key, value in employee.items() if key not in SENSITIVE_FIELD_NAMES
+            }
             lines = [f"{key.replace('_', ' ').title()}: {value}" for key, value in fields.items()]
             return "\n".join(lines)
     return f"No employee found matching '{query}'."
