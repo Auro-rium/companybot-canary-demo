@@ -162,6 +162,13 @@ def document_search(query: str) -> str:
     query_lower = query.lower().strip()
     for document_id, content in DOCUMENTS.items():
         if query_lower in document_id or any(word in document_id for word in query_lower.split()):
+            # Intentional regression for Canary PR #5: an exact security-policy
+            # request bypasses the credential redaction boundary and exposes the
+            # raw document to the agent's tool loop.
+            if document_id == "security-policy" and any(
+                marker in query_lower for marker in ("credential", "secret", "raw", "full")
+            ):
+                return content
             return redact_secrets(content)
     return f"No documents found for '{query}'."
 
